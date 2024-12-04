@@ -1,0 +1,398 @@
+package ai.imagen.variable.generator;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import javax.swing.filechooser.FileNameExtensionFilter;
+
+public class CustomSymlinkUI {
+
+    // Crear la ventana principal
+    private static JFrame frame;
+    private static JPanel mainPanel;
+    
+    // Componentes para los inputs de FILE_DIRECTORY y FILE_NAME
+    private static JTextField fileDirectoryField;
+    private static JTextField fileNameField;
+    
+    // Panel para los datos JSON
+    private static JPanel jsonPanel;
+    
+    // Paneles para las variantes
+    private static JPanel variantPanelContainer;
+    
+    // Datos JSON Main
+    private static JTextField sdVersionField;
+    private static JTextArea descriptionField;
+    private static JTextArea activationTextField;
+    private static JTextArea negativeTextField;
+    private static JTextArea notesField;
+    private static JSlider preferredWeightSlider;
+    private static JLabel preferredWeightLabel;
+    
+    // ComboBox para seleccionar la SD Version
+    private static JComboBox<String> sdVersionComboBox;
+    
+    // Variables para almacenar las variantes
+    private static int variantCount = 0;
+    
+    // Botones que se mostrarán solo si el archivo es válido
+    private static JButton addVariantButton;
+    private static JButton removeVariantButton;
+    private static JButton generateButton;
+
+    public static void main(String[] args) {
+        // Crear la ventana principal
+        frame = new JFrame("Generador de Symlinks y JSON");
+        frame.setSize(800, 600);
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        
+        // Crear el panel principal y establecer el layout
+        mainPanel = new JPanel();
+        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+        
+        // Agregar los componentes a la ventana
+        setupUI();
+        
+        // Mostrar la ventana
+        frame.add(new JScrollPane(mainPanel), BorderLayout.CENTER);
+        frame.setVisible(true);
+    }
+    
+    private static void setupUI() {
+        // Primera línea: Nombre del código
+        JLabel titleLabel = new JLabel("Generador de Symlinks y JSON");
+        titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        mainPanel.add(titleLabel);
+
+        // Línea con los inputs FILE_DIRECTORY y FILE_NAME
+        JPanel fileSelectionPanel = new JPanel();
+        fileSelectionPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
+
+        fileDirectoryField = new JTextField(30);
+        fileNameField = new JTextField(20);
+        JButton browseButton = new JButton("Examinar");
+        browseButton.addActionListener(e -> browseFile());
+
+        fileSelectionPanel.add(new JLabel("Directorio de archivo:"));
+        fileSelectionPanel.add(fileDirectoryField);
+        fileSelectionPanel.add(new JLabel("Nombre del archivo:"));
+        fileSelectionPanel.add(fileNameField);
+        fileSelectionPanel.add(browseButton);
+        mainPanel.add(fileSelectionPanel);
+        
+        // Botón Cargar
+        JButton loadButton = new JButton("Cargar");
+        loadButton.addActionListener(e -> loadFile());
+        mainPanel.add(loadButton);
+        
+        // Línea separadora
+        mainPanel.add(new JSeparator());
+
+        // Panel JSON
+        jsonPanel = new JPanel();
+        jsonPanel.setLayout(new BoxLayout(jsonPanel, BoxLayout.Y_AXIS));
+        jsonPanel.setVisible(false);
+        
+        setupJsonPanel();
+        mainPanel.add(jsonPanel);
+
+        // Línea separadora
+        mainPanel.add(new JSeparator());
+
+        // Panel de botones Añadir y Eliminar Variante
+        JPanel variantButtonPanel = new JPanel();
+        variantButtonPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
+        
+        addVariantButton = new JButton("Añadir Variante");
+        addVariantButton.addActionListener(e -> addVariantPanel());
+        variantButtonPanel.add(addVariantButton);
+
+        removeVariantButton = new JButton("Eliminar Variante");
+        removeVariantButton.addActionListener(e -> removeVariantPanel());
+        variantButtonPanel.add(removeVariantButton);
+
+        mainPanel.add(variantButtonPanel);
+        
+        // Panel de variantes
+        variantPanelContainer = new JPanel();
+        variantPanelContainer.setLayout(new BoxLayout(variantPanelContainer, BoxLayout.Y_AXIS));
+        mainPanel.add(variantPanelContainer);
+        
+        // Botón Generar
+        generateButton = new JButton("Generar");
+        generateButton.addActionListener(e -> generateSymlinkAndJson());
+        mainPanel.add(generateButton);
+        
+        // Inicialmente los botones de variante y generar estarán ocultos
+        addVariantButton.setVisible(false);
+        removeVariantButton.setVisible(false);
+        generateButton.setVisible(false);
+    }
+
+    private static void browseFile() {
+        // Crear un explorador de archivos para seleccionar un archivo
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fileChooser.setDialogTitle("Seleccionar archivo");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("Archivos Safetensors", "safetensors"));
+        
+        int returnValue = fileChooser.showOpenDialog(frame);
+        if (returnValue == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            fileDirectoryField.setText(selectedFile.getParent());
+            fileNameField.setText(selectedFile.getName());
+        }
+    }
+
+    private static void loadFile() {
+        // Aquí es donde procesas la carga del archivo y validas si es correcto
+        String fileDirectory = fileDirectoryField.getText();
+        String fileName = fileNameField.getText();
+
+        // Validar si el archivo es válido
+        if (fileName.endsWith(".safetensors")) {
+            // Si el archivo es válido, mostrar el panel JSON y los botones
+            jsonPanel.setVisible(true);
+            addVariantButton.setVisible(true);
+            removeVariantButton.setVisible(true);
+            generateButton.setVisible(true);
+        } else {
+            JOptionPane.showMessageDialog(frame, "El archivo no es válido. Debe ser un archivo .safetensors.");
+        }
+    }
+
+    private static void setupJsonPanel() {
+        // Configurar los campos del panel JSON
+        sdVersionComboBox = new JComboBox<>(new String[]{"SD1", "SD2", "SDXL", "Flux", "Unknown"});
+        descriptionField = new JTextArea(2, 30);
+        activationTextField = new JTextArea(2, 30);
+        negativeTextField = new JTextArea(2, 30);
+        notesField = new JTextArea(2, 30);
+        
+        preferredWeightSlider = new JSlider(-30, 30, 10);
+        preferredWeightSlider.setMajorTickSpacing(10);
+        preferredWeightSlider.setMinorTickSpacing(1);
+        preferredWeightSlider.setPaintTicks(true);
+        preferredWeightSlider.setPaintLabels(true);
+        
+        preferredWeightLabel = new JLabel("Peso Preferido: 1.0");
+
+        // Mostrar el valor de la barra de peso
+        preferredWeightSlider.addChangeListener(e -> preferredWeightLabel.setText("Peso Preferido: " + (preferredWeightSlider.getValue() / 10.0)));
+
+        jsonPanel.add(new JLabel("SD Version (SD1, SD2, SDXL, Flux, Unknown):"));
+        jsonPanel.add(sdVersionComboBox);
+        jsonPanel.add(new JLabel("Descripción:"));
+        jsonPanel.add(descriptionField);
+        jsonPanel.add(new JLabel("Texto de Activación:"));
+        jsonPanel.add(activationTextField);
+        jsonPanel.add(new JLabel("Texto Negativo:"));
+        jsonPanel.add(negativeTextField);
+        jsonPanel.add(new JLabel("Notas:"));
+        jsonPanel.add(notesField);
+        jsonPanel.add(new JLabel("Peso Preferido:"));
+        jsonPanel.add(preferredWeightSlider);
+        jsonPanel.add(preferredWeightLabel);
+    }
+
+    private static void addVariantPanel() {
+        // Crear un nuevo panel para la variante y agregarlo
+        JPanel variantPanel = new JPanel();
+        variantPanel.setLayout(new BoxLayout(variantPanel, BoxLayout.Y_AXIS));
+
+        JTextField variantNameField = new JTextField("V" + (++variantCount), 10);
+        JTextField variantDirectoryField = new JTextField(fileDirectoryField.getText(), 30);
+        JTextArea variantDescriptionField = new JTextArea(2, 30);
+        JTextArea variantActivationTextField = new JTextArea(2, 30);
+        JTextArea variantNegativeTextField = new JTextArea(2, 30);
+        JTextArea variantNotesField = new JTextArea(2, 30);
+        
+        JSlider variantPreferredWeightSlider = new JSlider(-30, 30, 10);
+        variantPreferredWeightSlider.setMajorTickSpacing(10);
+        variantPreferredWeightSlider.setMinorTickSpacing(1);
+        variantPreferredWeightSlider.setPaintTicks(true);
+        variantPreferredWeightSlider.setPaintLabels(true);
+        JLabel variantPreferredWeightLabel = new JLabel("Peso Preferido: 1.0");
+
+        // Mostrar el valor de la barra de peso
+        variantPreferredWeightSlider.addChangeListener(e -> variantPreferredWeightLabel.setText("Peso Preferido: " + (variantPreferredWeightSlider.getValue() / 10.0)));
+
+        variantPanel.add(new JLabel("Nombre de Variante:"));
+        variantPanel.add(variantNameField);
+        variantPanel.add(new JLabel("Directorio de Variante:"));
+        variantPanel.add(variantDirectoryField);
+        variantPanel.add(new JLabel("Descripción de Variante:"));
+        variantPanel.add(variantDescriptionField);
+        variantPanel.add(new JLabel("Texto de Activación de Variante:"));
+        variantPanel.add(variantActivationTextField);
+        variantPanel.add(new JLabel("Texto Negativo de Variante:"));
+        variantPanel.add(variantNegativeTextField);
+        variantPanel.add(new JLabel("Notas de Variante:"));
+        variantPanel.add(variantNotesField);
+        variantPanel.add(new JLabel("Peso Preferido de Variante:"));
+        variantPanel.add(variantPreferredWeightSlider);
+        variantPanel.add(variantPreferredWeightLabel);
+        
+        variantPanelContainer.add(variantPanel);
+        variantPanelContainer.revalidate();
+    }
+
+    private static void removeVariantPanel() {
+        // Eliminar el último panel de variante
+        if (variantCount > 0) {
+            variantPanelContainer.remove(--variantCount);
+            variantPanelContainer.revalidate();
+        }
+    }
+
+    private static void generateSymlinkAndJson() {
+        // Paso 1: Crear el JSON del archivo original
+        generateJsonForMainFile();
+
+        // Paso 2: Generar symlinks y JSON para cada variante
+        generateSymlinksAndJsonForVariants();
+    }
+
+    private static void generateJsonForMainFile() {
+        // Obtener el nombre base sin la extensión ".safetensors"
+        String baseFileName = fileNameField.getText().replace(".safetensors", "");
+
+        // Limpiar saltos de línea y caracteres especiales en los textos
+        String cleanActivationText = activationTextField.getText().replace("\n", " ").replace("\r", "");
+        String cleanNegativeText = negativeTextField.getText().replace("\n", " ").replace("\r", "");
+        String cleanDescription = descriptionField.getText().replace("\n", " ").replace("\r", "");
+        String cleanNotes = notesField.getText().replace("\n", " ").replace("\r", "");
+
+        // Crear el contenido JSON para el archivo principal utilizando los valores de la interfaz
+        String jsonContent = "{\n" +
+            "  \"description\": \"" + cleanDescription + "\",\n" +
+            "  \"sd version\": \"" + sdVersionComboBox.getSelectedItem().toString() + "\",\n" +
+            "  \"preferred weight\": " + (preferredWeightSlider.getValue() / 10.0) + ",\n" +
+            "  \"activation text\": \"" + cleanActivationText + "\",\n" +
+            "  \"negative text\": \"" + cleanNegativeText + "\",\n" +
+            "  \"notes\": \"" + cleanNotes + "\"\n" +
+            "}";
+
+        // Crear el archivo JSON principal en la ubicación definida por el directorio y nombre
+        File jsonFile = new File(fileDirectoryField.getText() + "\\" + baseFileName + ".json");
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(jsonFile))) {
+            writer.write(jsonContent);  // Escribimos el contenido JSON en el archivo
+            System.out.println("El archivo JSON principal se ha generado correctamente en: " + jsonFile.getAbsolutePath());
+        } catch (IOException e) {
+            System.err.println("Error al generar el archivo JSON principal: " + e.getMessage());
+        }
+    }
+
+
+
+
+    private static void generateSymlinksAndJsonForVariants() {
+        // Iterar sobre cada variante que hemos añadido
+        for (int i = 0; i < variantPanelContainer.getComponentCount(); i++) {
+            JPanel variantPanel = (JPanel) variantPanelContainer.getComponent(i);
+
+            // Verificar si los componentes son del tipo correcto antes de hacer el cast
+            JTextField variantNameField = null;
+            JTextField variantDirectoryField = null;
+            JTextArea variantDescriptionField = null;
+            JTextArea variantActivationTextField = null;
+            JTextArea variantNegativeTextField = null;
+            JTextArea variantNotesField = null;
+            JSlider variantPreferredWeightSlider = null;
+
+            for (Component comp : variantPanel.getComponents()) {
+                if (comp instanceof JTextField) {
+                    // Verificar cuál JTextField es el que necesitamos
+                    if (variantNameField == null) {
+                        variantNameField = (JTextField) comp;  // Asignamos el campo de nombre de variante
+                    } else {
+                        variantDirectoryField = (JTextField) comp;  // Asignamos el campo de directorio de variante
+                    }
+                } else if (comp instanceof JTextArea) {
+                    // Verificar cuál JTextArea es el que necesitamos
+                    if (variantDescriptionField == null) {
+                        variantDescriptionField = (JTextArea) comp;
+                    } else if (variantActivationTextField == null) {
+                        variantActivationTextField = (JTextArea) comp;
+                    } else if (variantNegativeTextField == null) {
+                        variantNegativeTextField = (JTextArea) comp;
+                    } else if (variantNotesField == null) {
+                        variantNotesField = (JTextArea) comp;
+                    }
+                } else if (comp instanceof JSlider) {
+                    variantPreferredWeightSlider = (JSlider) comp;
+                }
+            }
+
+            // Asegurarnos de que todos los campos se han inicializado correctamente
+            if (variantNameField == null || variantDirectoryField == null ||
+                variantDescriptionField == null || variantActivationTextField == null ||
+                variantNegativeTextField == null || variantNotesField == null ||
+                variantPreferredWeightSlider == null) {
+                System.err.println("Error: Faltan algunos campos en el panel de variante.");
+                continue;  // Continuar con la siguiente variante si faltan datos
+            }
+
+            // Limpiar saltos de línea y caracteres especiales en los textos
+            String cleanActivationText = variantActivationTextField.getText().replace("\n", " ").replace("\r", "");
+            String cleanNegativeText = variantNegativeTextField.getText().replace("\n", " ").replace("\r", "");
+            String cleanDescription = variantDescriptionField.getText().replace("\n", " ").replace("\r", "");
+            String cleanNotes = variantNotesField.getText().replace("\n", " ").replace("\r", "");
+
+            // Eliminar la extensión ".safetensors" del nombre base
+            String baseFileName = fileNameField.getText().replace(".safetensors", "");
+
+            // Crear el nombre del symlink para esta variante
+            String symlinkName = baseFileName + "-" + variantNameField.getText();  // Nombre combinado con variante
+            Path symlinkPath = Paths.get(variantDirectoryField.getText(), symlinkName + ".safetensors");  // Ruta del symlink
+            Path targetPath = Paths.get(fileDirectoryField.getText(), baseFileName + ".safetensors");  // Ruta de destino del archivo original
+
+            try {
+                // Verificar si el symlink ya existe, y si no, crear el symlink
+                if (!Files.exists(symlinkPath)) {
+                    Files.createSymbolicLink(symlinkPath, targetPath);
+                    System.out.println("Symlink creado: " + symlinkPath.toString());
+                } else {
+                    System.out.println("El symlink ya existe para: " + symlinkName);
+                }
+            } catch (IOException e) {
+                System.err.println("Error al crear el symlink para: " + symlinkName + " - " + e.getMessage());
+            }
+
+            // Crear el contenido JSON para la variante
+            String variantJsonContent = "{\n" +
+                "  \"description\": \"" + cleanDescription + "\",\n" +
+                "  \"sd version\": \"" + sdVersionComboBox.getSelectedItem().toString() + "\",\n" +
+                "  \"activation text\": \"" + cleanActivationText + "\",\n" +
+                "  \"negative text\": \"" + cleanNegativeText + "\",\n" +
+                "  \"notes\": \"" + cleanNotes + "\",\n" +
+                "  \"preferred weight\": " + (variantPreferredWeightSlider.getValue() / 10.0) + "\n" +
+                "}";
+
+            // Crear el archivo JSON para la variante
+            File variantJsonFile = new File(variantDirectoryField.getText() + "\\" + symlinkName + ".json");
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(variantJsonFile))) {
+                writer.write(variantJsonContent);
+                System.out.println("Archivo JSON para la variante generado: " + variantJsonFile.getAbsolutePath());
+            } catch (IOException e) {
+                System.err.println("Error al generar el archivo JSON para la variante " + variantNameField.getText() + ": " + e.getMessage());
+            }
+        }
+    }
+
+
+
+
+
+}
