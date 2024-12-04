@@ -51,3 +51,6 @@ NOTICE: If the name or path of the base LORA file is changed, the symlinks will 
 Requirements:
 Java (version 8 or higher)
 Operating System: Compatible with Windows, macOS, and Linux.
+
+You can download the **Custom LORA Symlink.zip** file from the following link:
+[Download Custom LORA Symlink.zip](https://github.com/BlaudioVargas/Lora-Symlink/releases/download/beta/Custom%20LORA%20Symlink.zip)
